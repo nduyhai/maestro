@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/docker/docker/client"
+	"github.com/emirpasic/gods/queues/arrayqueue"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,73 +11,47 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v2"
-	"github.com/nduyhai/maestro/internal/manager"
-	"github.com/nduyhai/maestro/internal/node"
 	"github.com/nduyhai/maestro/internal/server"
 	"github.com/nduyhai/maestro/internal/task"
 	"github.com/nduyhai/maestro/internal/worker"
 	"go.uber.org/fx"
 
-	"github.com/emirpasic/gods/queues/arrayqueue"
 	"github.com/google/uuid"
 )
 
 func main() {
 
-	t := task.Task{
-		ID:     uuid.New(),
-		Name:   "Task-1",
-		State:  task.Pending,
-		Image:  "Image-1",
-		Memory: 1024,
-		Disk:   1,
-	}
-
-	te := task.Event{
-		ID:        uuid.New(),
-		State:     task.Pending,
-		Timestamp: time.Now(),
-		Task:      t,
-	}
-
-	fmt.Printf("task: %v\n", t)
-	fmt.Printf("task event: %v\n", te)
-
+	db := make(map[uuid.UUID]*task.Task)
 	w := worker.Worker{
-		Name:  "worker-1",
 		Queue: arrayqueue.New(),
-		DB:    make(map[uuid.UUID]*task.Task),
+		DB:    db,
 	}
-	fmt.Printf("worker: %v\n", w)
-	w.CollectStats()
-	w.RunTask()
-	w.StartTask()
-	w.StopTask()
-
-	w.StopTask()
-
-	m := manager.Manager{
-		Pending: arrayqueue.New(),
-		TaskDB:  make(map[string][]*task.Task),
-		EventDB: make(map[string][]*task.Event),
-		Workers: []string{w.Name},
+	t := task.Task{
+		ID:    uuid.New(),
+		Name:  "postgres-container-02",
+		State: task.Scheduled,
+		Image: "postgres:latest",
 	}
 
-	fmt.Printf("manager: %v\n", m)
-	m.SelectWorker()
-	m.UpdateTasks()
-	m.SendWork()
-
-	n := node.Node{
-		Name:   "Node-1",
-		Ip:     "192.168.1.1",
-		Cores:  4,
-		Memory: 1024,
-		Disk:   25,
-		Role:   "worker",
+	// first time the worker will see the task
+	fmt.Println("starting task")
+	w.AddTask(t)
+	result := w.RunTask()
+	if result.Error != nil {
+		panic(result.Error)
 	}
 
-	fmt.Printf("node: %v\n", n)
+	t.ContainerID = result.ContainerID
+	fmt.Printf("task %s is running in container %s\n", t.ID, t.ContainerID)
+	fmt.Println("Sleepy time")
+	time.Sleep(time.Second * 30)
+	fmt.Printf("stopping task %s\n", t.ID)
+	t.State = task.Completed
+	w.AddTask(t)
+	result = w.RunTask()
+	if result.Error != nil {
+		panic(result.Error)
+	}
 
 	fx.New(
 		fx.Provide(NewLogger),
@@ -84,6 +60,44 @@ func main() {
 	).Run()
 }
 
+func createContainer() (*task.Docker, *task.DockerResult) {
+	c := task.Config{
+		Name:  "postgres-container-01",
+		Image: "postgres:latest",
+		Env: []string{
+			"POSTGRES_USER=maestro",
+			"POSTGRES_PASSWORD=thesecret",
+		},
+	}
+
+	dc, _ := client.NewClientWithOpts(client.FromEnv)
+	d := task.Docker{
+		Client: dc,
+		Config: c,
+	}
+
+	result := d.Run()
+	if result.Error != nil {
+		fmt.Printf("%v\n", result.Error)
+		return nil, nil
+	}
+
+	fmt.Printf(
+		"Container %s is running with config %v\n", result.ContainerID, c)
+	return &d, &result
+}
+
+func stopContainer(d *task.Docker, id string) *task.DockerResult {
+	result := d.Stop(id)
+	if result.Error != nil {
+		fmt.Printf("%v\n", result.Error)
+		return nil
+	}
+
+	fmt.Printf(
+		"Container %s has been stopped and removed\n", result.ContainerID)
+	return &result
+}
 func NewRoute(logger *httplog.Logger) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)

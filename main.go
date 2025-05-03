@@ -2,18 +2,25 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"net/http"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httplog/v2"
+	"github.com/nduyhai/maestro/internal/manager"
+	"github.com/nduyhai/maestro/internal/node"
+	"github.com/nduyhai/maestro/internal/server"
+	"github.com/nduyhai/maestro/internal/task"
+	"github.com/nduyhai/maestro/internal/worker"
+	"go.uber.org/fx"
 
 	"github.com/emirpasic/gods/queues/arrayqueue"
 	"github.com/google/uuid"
-	"github.com/nduyhai/maestro/manager"
-	"github.com/nduyhai/maestro/node"
-	"github.com/nduyhai/maestro/task"
-	"github.com/nduyhai/maestro/worker"
 )
 
 func main() {
-	fmt.Println("Hello World")
 
 	t := task.Task{
 		ID:     uuid.New(),
@@ -69,4 +76,42 @@ func main() {
 	}
 
 	fmt.Printf("node: %v\n", n)
+
+	fx.New(
+		fx.Provide(NewLogger),
+		fx.Provide(fx.Annotate(NewRoute, fx.As(new(http.Handler)))),
+		fx.Invoke(server.RegisterRoutes),
+	).Run()
+}
+
+func NewRoute(logger *httplog.Logger) *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(middleware.RealIP)
+	r.Use(httplog.RequestLogger(logger))
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	r.Get("/greeting", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("welcome"))
+	})
+
+	return r
+}
+
+func NewLogger() *httplog.Logger {
+	return httplog.NewLogger("maestro", httplog.Options{
+		LogLevel:         slog.LevelDebug,
+		Concise:          true,
+		RequestHeaders:   true,
+		MessageFieldName: "message",
+		Tags: map[string]string{
+			"version": "v0.0.1",
+			"env":     "dev",
+		},
+		QuietDownRoutes: []string{
+			"/",
+			"/health",
+		},
+		QuietDownPeriod: 10 * time.Second,
+		SourceFieldName: "maestro",
+	})
 }

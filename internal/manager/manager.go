@@ -3,9 +3,10 @@ package manager
 import (
 	"fmt"
 
+	"github.com/nduyhai/maestro/internal/task"
+
 	"github.com/emirpasic/gods/queues"
 	"github.com/google/uuid"
-	"github.com/nduyhai/maestro/task"
 )
 
 type Manager struct {

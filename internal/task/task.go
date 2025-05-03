@@ -2,14 +2,15 @@ package task
 
 import (
 	"context"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
 	"io"
 	"log"
 	"math"
 	"os"
 	"time"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
@@ -56,7 +57,7 @@ type Config struct {
 	ExposedPorts  nat.PortSet
 	Cmd           []string
 	Image         string
-	Cpu           float64
+	CPU           float64
 	Memory        int64
 	Disk          int64
 	Env           []string
@@ -72,7 +73,7 @@ func NewConfig(t *Task) Config {
 		ExposedPorts:  nil,
 		Cmd:           nil,
 		Image:         t.Image,
-		Cpu:           0,
+		CPU:           0,
 		Memory:        t.Memory,
 		Disk:          0,
 		Env:           nil,
@@ -106,7 +107,7 @@ func (d *Docker) Run() DockerResult {
 
 	r := container.Resources{
 		Memory:   d.Config.Memory,
-		NanoCPUs: int64(d.Config.Cpu * math.Pow(10, 9)),
+		NanoCPUs: int64(d.Config.CPU * math.Pow(10, 9)),
 	}
 
 	cc := container.Config{
@@ -166,11 +167,11 @@ type DockerResult struct {
 }
 
 var stateTransitionMap = map[State][]State{
-	Pending:   []State{Scheduled},
-	Scheduled: []State{Scheduled, Running, Failed},
-	Running:   []State{Running, Completed, Failed},
-	Completed: []State{},
-	Failed:    []State{},
+	Pending:   {Scheduled},
+	Scheduled: {Scheduled, Running, Failed},
+	Running:   {Running, Completed, Failed},
+	Completed: {},
+	Failed:    {},
 }
 
 func Contains(states []State, state State) bool {

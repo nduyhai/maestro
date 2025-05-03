@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/docker/docker/client"
-	"github.com/emirpasic/gods/queues/arrayqueue"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/emirpasic/gods/queues/arrayqueue"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -60,44 +60,6 @@ func main() {
 	).Run()
 }
 
-func createContainer() (*task.Docker, *task.DockerResult) {
-	c := task.Config{
-		Name:  "postgres-container-01",
-		Image: "postgres:latest",
-		Env: []string{
-			"POSTGRES_USER=maestro",
-			"POSTGRES_PASSWORD=thesecret",
-		},
-	}
-
-	dc, _ := client.NewClientWithOpts(client.FromEnv)
-	d := task.Docker{
-		Client: dc,
-		Config: c,
-	}
-
-	result := d.Run()
-	if result.Error != nil {
-		fmt.Printf("%v\n", result.Error)
-		return nil, nil
-	}
-
-	fmt.Printf(
-		"Container %s is running with config %v\n", result.ContainerID, c)
-	return &d, &result
-}
-
-func stopContainer(d *task.Docker, id string) *task.DockerResult {
-	result := d.Stop(id)
-	if result.Error != nil {
-		fmt.Printf("%v\n", result.Error)
-		return nil
-	}
-
-	fmt.Printf(
-		"Container %s has been stopped and removed\n", result.ContainerID)
-	return &result
-}
 func NewRoute(logger *httplog.Logger) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)

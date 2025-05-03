@@ -26,11 +26,15 @@ func (w *Worker) CollectStats() {
 func (w *Worker) RunTask() task.DockerResult {
 	t, ok := w.Queue.Dequeue()
 	if !ok {
-		log.Println("No tasks in the queue")
+		log.Println("no tasks in the queue")
 		return task.DockerResult{Error: nil}
 	}
 
-	taskQueued := t.(task.Task)
+	taskQueued, ok := t.(task.Task)
+	if !ok {
+		log.Println("error during task queue")
+		return task.DockerResult{Error: nil}
+	}
 	taskPersisted := w.DB[taskQueued.ID]
 	if taskPersisted == nil {
 		taskPersisted = &taskQueued

@@ -3,11 +3,16 @@ package worker
 import (
 	"errors"
 	"fmt"
-	"github.com/samber/lo"
 	"log"
 	"maps"
 	"slices"
 	"time"
+
+	"github.com/samber/lo"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/load"
+	"github.com/shirou/gopsutil/v4/mem"
 
 	"github.com/nduyhai/maestro/internal/task"
 
@@ -22,8 +27,25 @@ type Worker struct {
 	TaskCount int
 }
 
-func (w *Worker) CollectStats() {
-	fmt.Println("I will collect stats")
+type Stats struct {
+	Memory *mem.VirtualMemoryStat
+	CPU    []cpu.InfoStat
+	Disk   *disk.UsageStat
+	Load   *load.AvgStat
+}
+
+func (w *Worker) CollectStats() Stats {
+	memory, _ := mem.VirtualMemory()
+	info, _ := cpu.Info()
+	usage, _ := disk.Usage("/")
+	avg, _ := load.Avg()
+	return Stats{
+		Memory: memory,
+		CPU:    info,
+		Disk:   usage,
+		Load:   avg,
+	}
+
 }
 
 func (w *Worker) RunTask() task.DockerResult {

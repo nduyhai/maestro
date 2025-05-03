@@ -31,6 +31,7 @@ type Task struct {
 	Name          string
 	State         State
 	Image         string
+	CPU           float64
 	Memory        int64
 	Disk          int64
 	ExposedPorts  nat.PortMap
@@ -73,9 +74,9 @@ func NewConfig(t *Task) Config {
 		ExposedPorts:  nil,
 		Cmd:           nil,
 		Image:         t.Image,
-		CPU:           0,
+		CPU:           t.CPU,
 		Memory:        t.Memory,
-		Disk:          0,
+		Disk:          t.Disk,
 		Env:           nil,
 		RestartPolicy: "",
 	}

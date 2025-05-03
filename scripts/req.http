@@ -19,3 +19,7 @@ Content-Type: application/json
 ###
 DELETE http://localhost:8080/tasks/266592cd-960d-4091-981c-8c25c44b1018
 Content-Type: application/json
+
+###
+GET http://localhost:8080/stats
+Content-Type: application/json

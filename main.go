@@ -48,6 +48,7 @@ func NewRoute(logger *httplog.Logger, workerApi *worker.API) *chi.Mux {
 	r.Post("/tasks", workerApi.StartTaskHandler)
 	r.Get("/tasks", workerApi.GetTasksHandler)
 	r.Delete("/tasks/{taskID}", workerApi.StopTaskHandler)
+	r.Get("/stats", workerApi.CollectStats)
 
 	return r
 }
@@ -81,7 +82,7 @@ func runTasks(lifecycle fx.Lifecycle, w *worker.Worker, logger *httplog.Logger) 
 					if w.Queue.Size() != 0 {
 						result := w.RunTask()
 						if result.Error != nil {
-							logger.Error("Error running task: %v\n", result.Error)
+							logger.Error("Error running task:", slog.Any("error", result.Error))
 						} else {
 							logger.Info("No tasks to process currently.")
 						}

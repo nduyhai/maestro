@@ -3,12 +3,14 @@ package worker
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"log/slog"
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v2"
 	"github.com/google/uuid"
 	"github.com/nduyhai/maestro/internal/task"
-	"log"
-	"net/http"
 )
 
 type API struct {
@@ -20,6 +22,11 @@ func NewAPI(worker *Worker, logger *httplog.Logger) *API {
 	return &API{Worker: worker, logger: logger}
 
 }
+func (a *API) CollectStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(a.Worker.CollectStats())
+}
 
 func (a *API) StartTaskHandler(w http.ResponseWriter, r *http.Request) {
 	d := json.NewDecoder(r.Body)
@@ -30,9 +37,9 @@ func (a *API) StartTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		msg := fmt.Sprintf("Error unmarshalling body: %v\n", err)
 		a.logger.Info(msg)
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		e := ErrResponse{
-			HTTPStatusCode: 400,
+			HTTPStatusCode: http.StatusBadRequest,
 			Message:        msg,
 		}
 		_ = json.NewEncoder(w).Encode(e)
@@ -41,13 +48,13 @@ func (a *API) StartTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	a.Worker.AddTask(te.Task)
 	a.logger.Info(fmt.Sprintf("Task added: %v", te.Task))
-	w.WriteHeader(201)
+	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(te.Task)
 }
 
 func (a *API) GetTasksHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(a.Worker.GetTasks())
 }
 
@@ -55,7 +62,7 @@ func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskID")
 	if taskID == "" {
 		a.logger.Info("No taskID passed in request.")
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -63,7 +70,7 @@ func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	_, ok := a.Worker.DB[tID]
 	if !ok {
 		log.Printf("No task with ID %v found", tID)
-		w.WriteHeader(404)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	taskToStop := a.Worker.DB[tID]
@@ -71,8 +78,8 @@ func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	taskCopy.State = task.Completed
 	a.Worker.AddTask(taskCopy)
 
-	a.logger.Info("Added task %v to stop container %v", taskToStop.ID, taskToStop.ContainerID)
-	w.WriteHeader(204)
+	a.logger.Info("Added task to stop container", slog.Any("ID", taskToStop.ID), slog.Any("ContainerID", taskToStop.ContainerID))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type ErrResponse struct {

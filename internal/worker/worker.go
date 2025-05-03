@@ -3,7 +3,10 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"github.com/samber/lo"
 	"log"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/nduyhai/maestro/internal/task"
@@ -99,4 +102,9 @@ func (w *Worker) StopTask(t task.Task) task.DockerResult {
 
 func (w *Worker) AddTask(t task.Task) {
 	w.Queue.Enqueue(t)
+}
+
+func (w *Worker) GetTasks() []*task.Task {
+	tasks, _ := lo.CoalesceSlice(slices.Collect(maps.Values(w.DB)), []*task.Task{})
+	return tasks
 }

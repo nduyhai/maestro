@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -20,47 +20,23 @@ import (
 )
 
 func main() {
-
 	db := make(map[uuid.UUID]*task.Task)
 	w := worker.Worker{
 		Queue: arrayqueue.New(),
 		DB:    db,
 	}
-	t := task.Task{
-		ID:    uuid.New(),
-		Name:  "postgres-container-02",
-		State: task.Scheduled,
-		Image: "postgres:latest",
-	}
-
-	// first time the worker will see the task
-	fmt.Println("starting task")
-	w.AddTask(t)
-	result := w.RunTask()
-	if result.Error != nil {
-		panic(result.Error)
-	}
-
-	t.ContainerID = result.ContainerID
-	fmt.Printf("task %s is running in container %s\n", t.ID, t.ContainerID)
-	fmt.Println("Sleepy time")
-	time.Sleep(time.Second * 30)
-	fmt.Printf("stopping task %s\n", t.ID)
-	t.State = task.Completed
-	w.AddTask(t)
-	result = w.RunTask()
-	if result.Error != nil {
-		panic(result.Error)
-	}
 
 	fx.New(
 		fx.Provide(NewLogger),
+		fx.Supply(&w),
+		fx.Provide(worker.NewAPI),
 		fx.Provide(fx.Annotate(NewRoute, fx.As(new(http.Handler)))),
 		fx.Invoke(server.RegisterRoutes),
+		fx.Invoke(runTasks),
 	).Run()
 }
 
-func NewRoute(logger *httplog.Logger) *chi.Mux {
+func NewRoute(logger *httplog.Logger, workerApi *worker.API) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(httplog.RequestLogger(logger))
@@ -69,12 +45,16 @@ func NewRoute(logger *httplog.Logger) *chi.Mux {
 	r.Get("/greeting", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("welcome"))
 	})
+	r.Post("/tasks", workerApi.StartTaskHandler)
+	r.Get("/tasks", workerApi.GetTasksHandler)
+	r.Delete("/tasks/{taskID}", workerApi.StopTaskHandler)
 
 	return r
 }
 
 func NewLogger() *httplog.Logger {
 	return httplog.NewLogger("maestro", httplog.Options{
+		JSON:             true,
 		LogLevel:         slog.LevelDebug,
 		Concise:          true,
 		RequestHeaders:   true,
@@ -90,4 +70,28 @@ func NewLogger() *httplog.Logger {
 		QuietDownPeriod: 10 * time.Second,
 		SourceFieldName: "maestro",
 	})
+}
+
+func runTasks(lifecycle fx.Lifecycle, w *worker.Worker, logger *httplog.Logger) {
+	lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			logger.Info("starting tasks")
+			go func() {
+				for {
+					if w.Queue.Size() != 0 {
+						result := w.RunTask()
+						if result.Error != nil {
+							logger.Error("Error running task: %v\n", result.Error)
+						} else {
+							logger.Info("No tasks to process currently.")
+						}
+						logger.Info("Sleeping for 10 seconds.")
+						time.Sleep(10 * time.Second)
+					}
+				}
+			}()
+			return nil
+		},
+	})
+
 }

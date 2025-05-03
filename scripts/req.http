@@ -1,0 +1,21 @@
+GET http://localhost:8080/tasks
+Content-Type: application/json
+
+###
+POST http://localhost:8080/tasks
+Content-Type: application/json
+
+{
+  "ID": "266592cd-960d-4091-981c-8c25c44b1018",
+  "State": 2,
+  "Task": {
+    "State": 1,
+    "ID": "266592cd-960d-4091-981c-8c25c44b1018",
+    "Name": "postgres-container-03",
+    "Image": "postgres:latest"
+  }
+}
+
+###
+DELETE http://localhost:8080/tasks/266592cd-960d-4091-981c-8c25c44b1018
+Content-Type: application/json

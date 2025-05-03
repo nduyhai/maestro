@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/nduyhai/maestro/internal/httpx"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v2"
 	"github.com/google/uuid"
@@ -15,11 +17,11 @@ import (
 
 type API struct {
 	Worker *Worker
-	logger *httplog.Logger
+	Logger *httplog.Logger
 }
 
 func NewAPI(worker *Worker, logger *httplog.Logger) *API {
-	return &API{Worker: worker, logger: logger}
+	return &API{Worker: worker, Logger: logger}
 
 }
 func (a *API) CollectStats(w http.ResponseWriter, r *http.Request) {
@@ -36,9 +38,9 @@ func (a *API) StartTaskHandler(w http.ResponseWriter, r *http.Request) {
 	err := d.Decode(&te)
 	if err != nil {
 		msg := fmt.Sprintf("Error unmarshalling body: %v\n", err)
-		a.logger.Info(msg)
+		a.Logger.Info(msg)
 		w.WriteHeader(http.StatusBadRequest)
-		e := ErrResponse{
+		e := httpx.ErrResponse{
 			HTTPStatusCode: http.StatusBadRequest,
 			Message:        msg,
 		}
@@ -47,7 +49,7 @@ func (a *API) StartTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.Worker.AddTask(te.Task)
-	a.logger.Info(fmt.Sprintf("Task added: %v", te.Task))
+	a.Logger.Info(fmt.Sprintf("Task added: %v", te.Task))
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(te.Task)
 }
@@ -61,7 +63,7 @@ func (a *API) GetTasksHandler(w http.ResponseWriter, r *http.Request) {
 func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskID")
 	if taskID == "" {
-		a.logger.Info("No taskID passed in request.")
+		a.Logger.Info("No taskID passed in request.")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -78,11 +80,6 @@ func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	taskCopy.State = task.Completed
 	a.Worker.AddTask(taskCopy)
 
-	a.logger.Info("Added task to stop container", slog.Any("ID", taskToStop.ID), slog.Any("ContainerID", taskToStop.ContainerID))
+	a.Logger.Info("Added task to stop container", slog.Any("ID", taskToStop.ID), slog.Any("ContainerID", taskToStop.ContainerID))
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type ErrResponse struct {
-	HTTPStatusCode int
-	Message        string
 }

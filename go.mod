@@ -12,6 +12,7 @@ require (
 	github.com/samber/lo v1.50.0
 	github.com/shirou/gopsutil/v4 v4.25.4
 	go.uber.org/fx v1.23.0
+	resty.dev/v3 v3.0.0-beta.2
 )
 
 require (
@@ -46,6 +47,7 @@ require (
 	go.uber.org/dig v1.18.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.11.0 // indirect

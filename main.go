@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nduyhai/maestro/internal/manager"
+	"github.com/samber/lo"
+	"resty.dev/v3"
+
 	"github.com/emirpasic/gods/queues/arrayqueue"
 
 	"github.com/go-chi/chi/v5"
@@ -30,13 +34,19 @@ func main() {
 		fx.Provide(NewLogger),
 		fx.Supply(&w),
 		fx.Provide(worker.NewAPI),
+		fx.Provide(manager.NewManager),
+		fx.Provide(manager.NewAPI),
+
+		fx.Provide(NewResty),
+		fx.Provide(NewWorkers),
+
 		fx.Provide(fx.Annotate(NewRoute, fx.As(new(http.Handler)))),
 		fx.Invoke(server.RegisterRoutes),
 		fx.Invoke(runTasks),
 	).Run()
 }
 
-func NewRoute(logger *httplog.Logger, workerApi *worker.API) *chi.Mux {
+func NewRoute(logger *httplog.Logger, workerApi *worker.API, managerApi *manager.API) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(httplog.RequestLogger(logger))
@@ -45,10 +55,17 @@ func NewRoute(logger *httplog.Logger, workerApi *worker.API) *chi.Mux {
 	r.Get("/greeting", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("welcome"))
 	})
+
 	r.Post("/tasks", workerApi.StartTaskHandler)
 	r.Get("/tasks", workerApi.GetTasksHandler)
 	r.Delete("/tasks/{taskID}", workerApi.StopTaskHandler)
 	r.Get("/stats", workerApi.CollectStats)
+
+	r.Route("/manager", func(r chi.Router) {
+		r.Post("/tasks", managerApi.StartTaskHandler)
+		r.Get("/tasks", managerApi.GetTasksHandler)
+		r.Delete("/tasks/{taskID}", managerApi.StopTaskHandler)
+	})
 
 	return r
 }
@@ -95,4 +112,20 @@ func runTasks(lifecycle fx.Lifecycle, w *worker.Worker, logger *httplog.Logger) 
 		},
 	})
 
+}
+
+func NewResty(lifecycle fx.Lifecycle) *resty.Client {
+	client := resty.New()
+	lifecycle.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			return client.Close()
+		},
+	})
+	return client
+}
+
+func NewWorkers() []string {
+	return lo.Map(lo.Range(4), func(item int, index int) string {
+		return "localhost:8080"
+	})
 }

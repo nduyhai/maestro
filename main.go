@@ -24,14 +24,16 @@ import (
 )
 
 func main() {
+	logger := NewLogger()
 	db := make(map[uuid.UUID]*task.Task)
 	w := worker.Worker{
-		Queue: arrayqueue.New(),
-		DB:    db,
+		Queue:  arrayqueue.New(),
+		DB:     db,
+		Logger: logger,
 	}
 
 	fx.New(
-		fx.Provide(NewLogger),
+		fx.Supply(logger),
 		fx.Supply(&w),
 		fx.Provide(worker.NewAPI),
 		fx.Provide(manager.NewManager),

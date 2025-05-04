@@ -2,11 +2,15 @@ package manager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
 	"net/http"
 	"slices"
+
+	"github.com/nduyhai/maestro/internal/node"
+	"github.com/nduyhai/maestro/internal/scheduler"
 
 	"github.com/emirpasic/gods/queues/arrayqueue"
 	"github.com/go-chi/httplog/v2"
@@ -30,14 +34,20 @@ type Manager struct {
 	LastWorker    int
 	Client        *resty.Client
 	Logger        *httplog.Logger
+
+	WorkerNodes []*node.Node
+	Scheduler   scheduler.Scheduler
 }
 
 func NewManager(logger *httplog.Logger, client *resty.Client, workers []string) *Manager {
 
 	workerTaskMap := make(map[string][]uuid.UUID)
-
+	var nodes []*node.Node
 	for w := range workers {
 		workerTaskMap[workers[w]] = []uuid.UUID{}
+		nAPI := fmt.Sprintf("http://%v", workers[w])
+		n := node.NewNode(workers[w], nAPI)
+		nodes = append(nodes, n)
 	}
 	return &Manager{
 		Pending:       arrayqueue.New(),
@@ -49,21 +59,26 @@ func NewManager(logger *httplog.Logger, client *resty.Client, workers []string) 
 		LastWorker:    0,
 		Client:        client,
 		Logger:        logger,
+		Scheduler: &scheduler.RoundRobin{
+			Name:       "roundrobin",
+			LastWorker: 0,
+		},
 	}
 }
 
-func (m *Manager) SelectWorker() string {
+func (m *Manager) SelectWorker(t task.Task) (*node.Node, error) {
 	m.Logger.Info("I will select an appropriate worker")
-	var newWorker int
-	if m.LastWorker+1 < len(m.Workers) {
-		newWorker = m.LastWorker + 1
-		m.LastWorker++
-	} else {
-		newWorker = 0
-		m.LastWorker = 0
-	}
 
-	return m.Workers[newWorker]
+	candidates := m.Scheduler.SelectCandidateNodes(t, m.WorkerNodes)
+	if candidates == nil {
+		msg := fmt.Sprintf("No available candidates match resource request for task %v", t.ID)
+		err := errors.New(msg)
+		return nil, err
+	}
+	scores := m.Scheduler.Score(t, candidates)
+	selectedNode := m.Scheduler.Pick(scores, candidates)
+
+	return selectedNode, nil
 }
 
 func (m *Manager) UpdateTasks() {
@@ -112,16 +127,22 @@ func (m *Manager) UpdateTasks() {
 func (m *Manager) SendWork() {
 	m.Logger.Info("I will send work to workers")
 	if m.Pending.Size() > 0 {
-		w := m.SelectWorker()
-
 		e, _ := m.Pending.Dequeue()
 		te := e.(task.Event)
 		t := te.Task
 		m.Logger.Info("Pulled %v off pending queue", slog.Any("task", t))
 
 		m.EventDB[te.ID] = &te
-		m.WorkerTaskMap[w] = append(m.WorkerTaskMap[w], te.Task.ID)
-		m.TaskWorkerMap[t.ID] = w
+
+		t = te.Task
+		w, err := m.SelectWorker(t)
+		if err != nil {
+			m.Logger.Error("Error selecting worker", slog.Any("err", err))
+			return
+		}
+
+		m.WorkerTaskMap[w.Name] = append(m.WorkerTaskMap[w.Name], te.Task.ID)
+		m.TaskWorkerMap[t.ID] = w.Name
 
 		t.State = task.Scheduled
 		m.TaskDB[t.ID] = &t
@@ -130,10 +151,10 @@ func (m *Manager) SendWork() {
 			m.Logger.Info("Unable to marshal task object", slog.Any("task", t))
 			return
 		}
-		url := fmt.Sprintf("http://%s/tasks", w)
+		url := fmt.Sprintf("http://%s/tasks", w.Name)
 		resp, err := m.Client.R().SetBody(data).SetContentType("application/json").Post(url)
 		if err != nil {
-			m.Logger.Error("Error connecting to %v: %v", w, err)
+			m.Logger.Error("Error connecting to", slog.Any("worker", w), slog.Any("err", err))
 			m.Pending.Enqueue(te)
 			return
 		}
@@ -169,4 +190,21 @@ func (m *Manager) GetTasks() []*task.Task {
 	tasks, _ := lo.CoalesceSlice(slices.Collect(maps.Values(m.TaskDB)), []*task.Task{})
 	return tasks
 
+}
+
+func (m *Manager) stopTask(worker string, taskID string) {
+	url := fmt.Sprintf("http://%s/tasks/%s", worker, taskID)
+
+	resp, err := m.Client.R().Delete(url)
+
+	if err != nil {
+		m.Logger.Error("Error stopping task", slog.Any("err", err))
+		return
+	}
+
+	if resp.StatusCode() != http.StatusNoContent {
+		m.Logger.Error("Error sending request stopping task", slog.Any("err", err))
+		return
+	}
+	m.Logger.Info("task has been scheduled to be stopped", slog.Any("task", taskID))
 }

@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"maps"
 	"slices"
 	"time"
+
+	"github.com/go-chi/httplog/v2"
 
 	"github.com/samber/lo"
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -25,6 +28,7 @@ type Worker struct {
 	Queue     queues.Queue
 	DB        map[uuid.UUID]*task.Task
 	TaskCount int
+	Logger    *httplog.Logger
 }
 
 type Stats struct {
@@ -51,13 +55,13 @@ func (w *Worker) CollectStats() Stats {
 func (w *Worker) RunTask() task.DockerResult {
 	t, ok := w.Queue.Dequeue()
 	if !ok {
-		log.Println("no tasks in the queue")
+		w.Logger.Error("no tasks in the queue")
 		return task.DockerResult{Error: nil}
 	}
 
 	taskQueued, ok := t.(task.Task)
 	if !ok {
-		log.Println("error during task queue")
+		w.Logger.Error("error during task queue")
 		return task.DockerResult{Error: nil}
 	}
 	taskPersisted := w.DB[taskQueued.ID]
@@ -85,13 +89,13 @@ func (w *Worker) RunTask() task.DockerResult {
 }
 
 func (w *Worker) StartTask(t task.Task) task.DockerResult {
-	fmt.Println("I will start a task")
+	w.Logger.Info("I will start a task")
 	t.StartTime = time.Now().UTC()
 	config := task.NewConfig(&t)
-	d := task.NewDocker(config)
+	d := task.NewDocker(config, w.Logger)
 	result := d.Run()
 	if result.Error != nil {
-		log.Printf("Err running task %v: %v\n", t.ID, result.Error)
+		w.Logger.Error("Err running task", slog.Any("error", result.Error), slog.Any("taskID", t.ID))
 		t.State = task.Failed
 		w.DB[t.ID] = &t
 		return result
@@ -105,19 +109,18 @@ func (w *Worker) StartTask(t task.Task) task.DockerResult {
 }
 
 func (w *Worker) StopTask(t task.Task) task.DockerResult {
-	fmt.Println("I will stop a task")
+	w.Logger.Info("I will stop a task")
 	config := task.NewConfig(&t)
-	d := task.NewDocker(config)
+	d := task.NewDocker(config, w.Logger)
 
 	result := d.Stop(t.ContainerID)
 	if result.Error != nil {
-		log.Printf("Error stopping container %v: %v\n", t.ContainerID, result.Error)
+		w.Logger.Error("Error stopping container", slog.Any("ContainerID", t.ContainerID), slog.Any("error", result.Error))
 	}
 	t.FinishTime = time.Now().UTC()
 	t.State = task.Completed
 	w.DB[t.ID] = &t
-	log.Printf("Stopped and removed container %v for task %v\n",
-		t.ContainerID, t.ID)
+	d.Logger.Info("Stopped task", slog.Any("ContainerID", t.ContainerID), slog.Any("taskID", t.ID))
 
 	return result
 }
@@ -129,4 +132,44 @@ func (w *Worker) AddTask(t task.Task) {
 func (w *Worker) GetTasks() []*task.Task {
 	tasks, _ := lo.CoalesceSlice(slices.Collect(maps.Values(w.DB)), []*task.Task{})
 	return tasks
+}
+
+func (w *Worker) InspectTask(t task.Task) task.DockerInspectResponse {
+	config := task.NewConfig(&t)
+	d := task.NewDocker(config, w.Logger)
+	return d.Inspect(t.ContainerID)
+}
+
+func (w *Worker) UpdateTasks() {
+	for {
+		log.Println("Checking status of tasks")
+		w.updateTasks()
+		log.Println("Task updates completed")
+		log.Println("Sleeping for 15 seconds")
+		time.Sleep(15 * time.Second)
+	}
+}
+
+func (w *Worker) updateTasks() {
+	for id, t := range w.DB {
+		if t.State == task.Running {
+			resp := w.InspectTask(*t)
+			if resp.Error != nil {
+				fmt.Printf("ERROR: %v\n", resp.Error)
+			}
+
+			if resp.Container == nil {
+				log.Printf("No container for running task %s\n", id)
+				w.DB[id].State = task.Failed
+			}
+
+			if resp.Container.State.Status == "exited" {
+				log.Printf("Container for task %s in non-running state %s",
+					id, resp.Container.State.Status)
+				w.DB[id].State = task.Failed
+			}
+
+			w.DB[id].HostPorts = resp.Container.NetworkSettings.NetworkSettingsBase.Ports
+		}
+	}
 }

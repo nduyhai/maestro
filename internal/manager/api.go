@@ -72,6 +72,7 @@ func (a *API) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
 	taskCopy.State = task.Completed
 	te.Task = taskCopy
 	a.Manager.AddTask(te)
+	a.Manager.SendWork()
 
 	a.Logger.Info("Added task event to stop task", slog.Any("tID", te.ID), slog.Any("ID", taskToStop.ID))
 	w.WriteHeader(http.StatusOK)

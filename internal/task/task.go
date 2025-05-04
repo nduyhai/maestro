@@ -4,9 +4,12 @@ import (
 	"context"
 	"io"
 	"log"
+	"log/slog"
 	"math"
 	"os"
 	"time"
+
+	"github.com/go-chi/httplog/v2"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -34,13 +37,16 @@ type Task struct {
 	CPU           float64
 	Memory        int64
 	Disk          int64
-	ExposedPorts  nat.PortMap
+	ExposedPorts  nat.PortSet
 	BindingPorts  map[string]string
-	RestartPolicy string
+	RestartPolicy container.RestartPolicyMode
 	StartTime     time.Time
 	EndTime       time.Time
 	FinishTime    time.Time
 	ContainerID   string
+	Env           []string
+	Cmd           []string
+	HostPorts     nat.PortMap
 }
 
 type Event struct {
@@ -71,25 +77,26 @@ func NewConfig(t *Task) Config {
 		AttachStdin:   false,
 		AttachStdout:  false,
 		AttachStderr:  false,
-		ExposedPorts:  nil,
-		Cmd:           nil,
+		ExposedPorts:  t.ExposedPorts,
+		Cmd:           t.Cmd,
 		Image:         t.Image,
 		CPU:           t.CPU,
 		Memory:        t.Memory,
 		Disk:          t.Disk,
-		Env:           nil,
-		RestartPolicy: "",
+		Env:           t.Env,
+		RestartPolicy: t.RestartPolicy,
 	}
 }
 
 type Docker struct {
 	Client *client.Client
 	Config Config
+	Logger *httplog.Logger
 }
 
-func NewDocker(config Config) *Docker {
+func NewDocker(config Config, Logger *httplog.Logger) *Docker {
 	dc, _ := client.NewClientWithOpts(client.FromEnv)
-	return &Docker{Config: config, Client: dc}
+	return &Docker{Config: config, Client: dc, Logger: Logger}
 }
 
 func (d *Docker) Run() DockerResult {
@@ -97,7 +104,7 @@ func (d *Docker) Run() DockerResult {
 	reader, err := d.Client.ImagePull(
 		ctx, d.Config.Image, image.PullOptions{})
 	if err != nil {
-		log.Printf("Error pulling image %s: %v\n", d.Config.Name, err)
+		d.Logger.Error("Error pulling image", slog.Any("image", d.Config.Image), slog.Any("error", err))
 		return DockerResult{Error: err}
 	}
 	_, _ = io.Copy(os.Stdout, reader)
@@ -125,15 +132,17 @@ func (d *Docker) Run() DockerResult {
 	}
 	resp, err := d.Client.ContainerCreate(ctx, &cc, &hc, nil, nil, d.Config.Name)
 	if err != nil {
-		log.Printf("Error creating container using image %s: %v\n", d.Config.Image, err)
+		d.Logger.Error("Error creating container using image", slog.Any("image", d.Config.Image), slog.Any("error", err))
 		return DockerResult{Error: err}
 	}
 
 	err = d.Client.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	if err != nil {
-		log.Printf("Error starting container %s: %v\n", resp.ID, err)
+		d.Logger.Error("Error starting container", slog.Any("ID", resp.ID), slog.Any("error", err))
 		return DockerResult{Error: err}
 	}
+
+	d.Logger.Info("Container created", slog.Any("ID", resp.ID))
 
 	return DockerResult{ContainerID: resp.ID, Action: "start", Result: "success"}
 }
@@ -158,6 +167,18 @@ func (d *Docker) Stop(id string) DockerResult {
 	}
 
 	return DockerResult{Action: "stop", Result: "success", Error: nil}
+}
+
+func (d *Docker) Inspect(containerID string) DockerInspectResponse {
+	dc, _ := client.NewClientWithOpts(client.FromEnv)
+	ctx := context.Background()
+	resp, err := dc.ContainerInspect(ctx, containerID)
+	if err != nil {
+		log.Printf("Error inspecting container: %s\n", err)
+		return DockerInspectResponse{Error: err}
+	}
+
+	return DockerInspectResponse{Container: &resp}
 }
 
 type DockerResult struct {
@@ -186,4 +207,9 @@ func Contains(states []State, state State) bool {
 
 func ValidStateTransition(src State, dst State) bool {
 	return Contains(stateTransitionMap[src], dst)
+}
+
+type DockerInspectResponse struct {
+	Error     error
+	Container *container.InspectResponse
 }

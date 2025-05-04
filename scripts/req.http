@@ -12,7 +12,11 @@ Content-Type: application/json
     "State": 1,
     "ID": "266592cd-960d-4091-981c-8c25c44b1018",
     "Name": "postgres-container-03",
-    "Image": "postgres:latest"
+    "Image": "postgres:latest",
+    "Env" : [
+      "POSTGRES_USER=maestro",
+      "POSTGRES_PASSWORD=thesecret"
+    ]
   }
 }
 
@@ -36,6 +40,14 @@ Content-Type: application/json
     "State": 1,
     "ID": "266592cd-960d-4091-981c-8c25c44b1018",
     "Name": "postgres-container-03",
-    "Image": "postgres:latest"
+    "Image": "postgres:latest",
+    "Env" : [
+      "POSTGRES_USER=maestro",
+      "POSTGRES_PASSWORD=thesecret"
+    ]
   }
 }
+
+###
+DELETE http://localhost:8080/manager/tasks/266592cd-960d-4091-981c-8c25c44b1018
+Content-Type: application/json

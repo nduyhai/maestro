@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"go.etcd.io/bbolt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -38,6 +39,8 @@ func main() {
 		fx.Provide(worker.NewAPI),
 		fx.Provide(manager.NewManager),
 		fx.Provide(manager.NewAPI),
+
+		fx.Provide(NewBolt),
 
 		fx.Provide(NewResty),
 		fx.Provide(NewWorkers),
@@ -130,4 +133,18 @@ func NewWorkers() []string {
 	return lo.Map(lo.Range(4), func(item int, index int) string {
 		return "localhost:8080"
 	})
+}
+
+func NewBolt(lifecycle fx.Lifecycle) (*bbolt.DB, error) {
+	db, err := bbolt.Open("maestro.db", 0600, nil)
+	if err != nil {
+
+		return nil, err
+	}
+	lifecycle.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			return db.Close()
+		},
+	})
+	return db, nil
 }

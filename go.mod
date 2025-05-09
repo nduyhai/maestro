@@ -13,7 +13,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.25.4
 	go.etcd.io/bbolt v1.4.0
 	go.uber.org/fx v1.23.0
-	resty.dev/v3 v3.0.0-beta.2
+	resty.dev/v3 v3.0.0-beta.3
 )
 
 require (

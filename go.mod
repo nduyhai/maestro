@@ -10,7 +10,7 @@ require (
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/google/uuid v1.6.0
 	github.com/samber/lo v1.50.0
-	github.com/shirou/gopsutil/v4 v4.25.4
+	github.com/shirou/gopsutil/v4 v4.25.5
 	go.etcd.io/bbolt v1.4.0
 	go.uber.org/fx v1.23.0
 	resty.dev/v3 v3.0.0-beta.3
@@ -23,7 +23,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/ebitengine/purego v0.8.2 // indirect
+	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/samber/lo v1.50.0
 	github.com/shirou/gopsutil/v4 v4.25.5
-	go.etcd.io/bbolt v1.4.0
+	go.etcd.io/bbolt v1.4.1
 	go.uber.org/fx v1.24.0
 	resty.dev/v3 v3.0.0-beta.3
 )

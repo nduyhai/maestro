@@ -3,7 +3,7 @@ module github.com/nduyhai/maestro
 go 1.24.1
 
 require (
-	github.com/docker/docker v28.2.2+incompatible
+	github.com/docker/docker v28.3.0+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/emirpasic/gods v1.18.1
 	github.com/go-chi/chi/v5 v5.2.1

@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/google/uuid v1.6.0
-	github.com/samber/lo v1.50.0
+	github.com/samber/lo v1.51.0
 	github.com/shirou/gopsutil/v4 v4.25.5
 	go.etcd.io/bbolt v1.4.1
 	go.uber.org/fx v1.24.0

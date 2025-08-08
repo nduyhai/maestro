@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/docker/docker v28.3.2+incompatible
-	github.com/docker/go-connections v0.5.0
+	github.com/docker/go-connections v0.6.0
 	github.com/emirpasic/gods v1.18.1
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httplog/v2 v2.1.1

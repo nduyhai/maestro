@@ -10,7 +10,7 @@ require (
 	github.com/go-chi/httplog/v2 v2.1.1
 	github.com/google/uuid v1.6.0
 	github.com/samber/lo v1.51.0
-	github.com/shirou/gopsutil/v4 v4.25.5
+	github.com/shirou/gopsutil/v4 v4.25.8
 	go.etcd.io/bbolt v1.4.1
 	go.uber.org/fx v1.24.0
 	resty.dev/v3 v3.0.0-beta.3
@@ -51,7 +51,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
